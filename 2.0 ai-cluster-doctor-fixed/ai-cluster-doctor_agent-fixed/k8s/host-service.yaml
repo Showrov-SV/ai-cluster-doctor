@@ -1,0 +1,25 @@
+# Host Service - HTTP API only.
+#
+# The Host's UDP LAN-discovery port (47110, see backend/discovery.py) is
+# deliberately NOT exposed here. Kubernetes Services can technically proxy
+# UDP, but broadcast packets don't traverse cluster overlay networks the
+# way they do on a physical LAN in the first place - an Agent outside the
+# cluster could never discover a Dockerized/clustered Host this way
+# regardless of Service config. Point Agents at CLUSTER_DOCTOR_HOST_URL
+# explicitly instead (the Ingress hostname - see ingress.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: host-service
+  labels:
+    app: ai-cluster-doctor
+    component: host
+spec:
+  selector:
+    app: ai-cluster-doctor
+    component: host
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

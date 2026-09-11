@@ -1,0 +1,44 @@
+# Storage for the Host's SQLite database (devices, users, settings - see
+# backend/db.py), so it survives pod restarts/rescheduling.
+#
+# NOTE on PersistentVolume vs dynamic provisioning: on a real cloud
+# cluster (EKS/GKE/AKS), you'd normally skip authoring a PersistentVolume
+# by hand entirely - just create the PersistentVolumeClaim with a
+# StorageClass, and the cluster's provisioner creates a matching PV for
+# you automatically. A hand-authored PersistentVolume like the one below
+# is for *static* provisioning, appropriate for local/on-prem clusters
+# (kind, minikube, k3s) using hostPath storage. If you're deploying to a
+# managed cloud cluster, delete the PersistentVolume below and replace
+# `storageClassName: manual` in the PVC with your cluster's real
+# StorageClass (e.g. "gp2", "standard-rwo") to get dynamic provisioning
+# instead.
+#
+# Also note: hostPath ties the volume to whichever specific node it's
+# created on - fine for a single-node dev cluster, not for a real
+# multi-node production cluster (use a real network-attached
+# StorageClass there instead, per the note above).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: host-data-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /mnt/data/ai-cluster-doctor
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: host-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
+  resources:
+    requests:
+      storage: 1Gi

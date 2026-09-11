@@ -1,0 +1,70 @@
+# Host (backend) Deployment.
+#
+# replicas: 1 is deliberate, not a placeholder - db.py uses SQLite, which
+# doesn't handle concurrent writers from multiple pods safely (same reason
+# the prod Dockerfile in Phase 7 runs a single uvicorn worker). Don't scale
+# this past 1 replica without first swapping SQLite for a real
+# client-server database.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: host
+  labels:
+    app: ai-cluster-doctor
+    component: host
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # avoid two pods briefly both mounting the ReadWriteOnce PVC during a rolling update
+  selector:
+    matchLabels:
+      app: ai-cluster-doctor
+      component: host
+  template:
+    metadata:
+      labels:
+        app: ai-cluster-doctor
+        component: host
+    spec:
+      containers:
+        - name: host
+          image: ai-cluster-doctor-host:latest
+          imagePullPolicy: IfNotPresent  # switch to Always once pulling from a real registry with versioned tags
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: host-config
+            - secretRef:
+                name: host-secrets
+          volumeMounts:
+            - name: host-data
+              mountPath: /app/data
+          # /openapi.json is FastAPI's built-in, unauthenticated schema
+          # endpoint - used here purely as a lightweight "is the process
+          # up and serving HTTP" check, not a real /health endpoint (the
+          # app doesn't have one; adding one is out of scope for this
+          # phase, which is manifests only).
+          readinessProbe:
+            httpGet:
+              path: /openapi.json
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /openapi.json
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: host-data
+          persistentVolumeClaim:
+            claimName: host-data-pvc

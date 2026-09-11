@@ -1,0 +1,18 @@
+# Non-secret Host configuration. Secrets (JWT signing key, agent API key,
+# admin credentials, LLM API keys) live in secret.yaml instead - see the
+# note there about not committing real values to this file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: host-config
+data:
+  CLUSTER_DOCTOR_PORT: "8000"
+  # SQLite file path inside the container - must live under the
+  # PersistentVolumeClaim's mount path (see persistent-volume.yaml and
+  # host-deployment.yaml, which mounts the claim at /app/data).
+  CLUSTER_DOCTOR_DB_PATH: "/app/data/cluster_doctor.db"
+  # Optional LLM chatbot backend (see backend/llm_provider.py). Empty by
+  # default = fully offline rule-based assistant. The provider *name* here
+  # isn't secret; the matching API key (e.g. ANTHROPIC_API_KEY) is, and
+  # belongs in secret.yaml.
+  CLUSTER_DOCTOR_LLM_PROVIDER: ""

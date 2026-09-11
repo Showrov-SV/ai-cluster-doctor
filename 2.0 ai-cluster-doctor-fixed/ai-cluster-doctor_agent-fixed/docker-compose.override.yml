@@ -1,0 +1,45 @@
+# AI Cluster Doctor - development overrides.
+#
+# Docker Compose automatically merges this file on top of docker-compose.yml
+# whenever you run `docker compose up` without explicitly naming files -
+# so local development is just:
+#
+#   docker compose up --build
+#
+# This switches the Host to `uvicorn --reload` against your local source
+# (bind-mounted, so edits apply immediately, no rebuild needed) and the
+# frontend to the Vite dev server on port 5173 instead of the nginx-served
+# production build. For a production-only run that ignores this file:
+#
+#   docker compose -f docker-compose.yml up --build
+
+services:
+  host:
+    build:
+      target: dev
+    volumes:
+      - ./backend:/app
+    environment:
+      - CLUSTER_DOCTOR_DB_PATH=/app/cluster_doctor.db
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      target: dev
+    volumes:
+      - ./frontend:/app
+      # anonymous volume so the container's own node_modules (installed
+      # during the image build) isn't shadowed by the bind mount above
+      - /app/node_modules
+    # Note: Compose CONCATENATES (not replaces) list-type fields like
+    # `ports` across docker-compose.yml + this override file, so the base
+    # file's "80:80" mapping is still present here alongside 5173:5173 -
+    # it's harmless (nginx doesn't run in the dev target, so nothing's
+    # listening on container port 80; the mapping just goes unused) but
+    # will fail to bind if something else on your machine is already
+    # using host port 80.
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE=http://localhost:8000
+    command: npm run dev -- --host 0.0.0.0

@@ -1,0 +1,79 @@
+# AI Cluster Doctor - production compose file.
+#
+# Run with:  docker compose -f docker-compose.yml up --build
+# (explicitly naming this file skips docker-compose.override.yml, so this
+# is the production-only path: no bind mounts, no --reload, no dev server)
+#
+# For local development, just run `docker compose up --build` instead -
+# Docker Compose auto-merges docker-compose.override.yml on top of this
+# file whenever you don't explicitly pass -f, which switches both
+# services into dev mode (hot reload, bind-mounted source). See that file
+# for details.
+
+services:
+  host:
+    build:
+      context: ./backend
+      target: prod
+    image: ai-cluster-doctor-host:latest
+    ports:
+      - "8000:8000"
+      # LAN auto-discovery (UDP). Discovery replies carry the Host's own
+      # address, so this works for Agents on the same Docker network out
+      # of the box; for Agents on your *physical* LAN to discover a
+      # Dockerized Host, run this service with `network_mode: host`
+      # instead (Linux only) - true broadcast doesn't traverse Docker's
+      # default bridge network the way it does on bare metal.
+      - "47110:47110/udp"
+    volumes:
+      - host_data:/app/data
+    environment:
+      - CLUSTER_DOCTOR_DB_PATH=/app/data/cluster_doctor.db
+      - CLUSTER_DOCTOR_PORT=8000
+      # Optional - set these to pin secrets instead of letting the Host
+      # auto-generate and persist them on first run (see backend/auth.py):
+      # - JWT_SECRET=
+      # - CLUSTER_DOCTOR_AGENT_API_KEY=
+      # - ADMIN_USERNAME=
+      # - ADMIN_PASSWORD=
+      # Optional LLM chatbot backend (see backend/llm_provider.py) - unset
+      # by default, which keeps the fully-offline rule-based assistant:
+      # - CLUSTER_DOCTOR_LLM_PROVIDER=anthropic
+      # - ANTHROPIC_API_KEY=
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        # Must be reachable from the END USER'S BROWSER, not from inside
+        # Docker - e.g. your machine's LAN IP or a real domain. The
+        # default below only works if you're browsing from the same
+        # machine the containers run on.
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+    image: ai-cluster-doctor-frontend:latest
+    ports:
+      - "80:80"
+    depends_on:
+      - host
+    restart: unless-stopped
+
+  # Optional: a containerized Agent for demoing the Host<->Agent flow
+  # without a real Windows machine. Doesn't start by default - run with:
+  #   docker compose --profile demo up --build
+  agent-demo:
+    build: ./agent
+    image: ai-cluster-doctor-agent:latest
+    environment:
+      # Container-to-container address - fine here, since this runs
+      # *inside* Docker rather than in a browser (unlike VITE_API_BASE above).
+      - CLUSTER_DOCTOR_HOST_URL=http://host:8000
+      - CLUSTER_DOCTOR_API_KEY=${AGENT_API_KEY:-}
+    depends_on:
+      - host
+    restart: unless-stopped
+    profiles: ["demo"]
+
+volumes:
+  host_data:

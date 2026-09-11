@@ -1,0 +1,46 @@
+# Single-hostname Ingress: /api/* -> Host, everything else -> frontend.
+#
+# This only works cleanly because frontend/src/api.js already prepends
+# "/api/..." to every backend call itself - so VITE_API_BASE at build time
+# should be set to just the bare origin (e.g.
+# "https://cluster-doctor.example.com", no "/api" suffix). If you rebuild
+# the frontend image pointing at a different hostname than the one below,
+# update `host:` here to match (or vice versa).
+#
+# Assumes an ingress-nginx controller is installed in the cluster
+# (ingressClassName: nginx below) - swap it for your controller's class if
+# you're using a different one (e.g. Traefik, AWS ALB).
+#
+# TLS is left commented out: fill in a real cert/Secret (e.g. via
+# cert-manager) before enabling it - don't ship this with ssl-redirect
+# forced on and no certificate configured.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cluster-doctor-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: cluster-doctor.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: host-service
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
+  # tls:
+  #   - hosts:
+  #       - cluster-doctor.example.com
+  #     secretName: cluster-doctor-tls
